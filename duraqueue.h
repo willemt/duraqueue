@@ -3,6 +3,10 @@
 
 typedef struct
 {
+    unsigned int head, tail;
+
+    void* data;
+
     size_t max_size;
 
     /* number of items within queue */
@@ -18,6 +22,8 @@ typedef struct
 
     /* monotonic id for queue items */
     unsigned int item_id;
+
+    void* items;
 } dqueue_t;
 
 int dqueue_free(dqueue_t* me);
@@ -60,5 +66,11 @@ int dqueue_poll(dqueue_t* me);
 int dqueue_peek(dqueue_t* me, const char* path, char* data, size_t len);
 
 int dqueue_is_empty(dqueue_t* me);
+
+int dqueue_size(const dqueue_t *me);
+
+int dqueue_usedspace(const dqueue_t *me);
+
+int dqueue_unusedspace(const dqueue_t *me);
 
 #endif /* DURAQUEUE_H */

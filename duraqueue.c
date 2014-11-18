@@ -8,7 +8,15 @@
 #include <errno.h>
 #include <limits.h>
 
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
 #include "duraqueue.h"
+#include "arrayqueue.h"
 
 #define STAMP "xxxxxxxxxxxxxxxx"
 #define HEADER 0
@@ -22,6 +30,12 @@ typedef struct
     unsigned int len;         /* 4 */
     unsigned int padding1;    /* 4 */
 } header_t;
+
+typedef struct
+{
+    unsigned int pos;
+    unsigned int len;
+} item_t;
 
 #define ITEM_METADATA_SIZE sizeof(header_t) + sizeof(header_t)
 
@@ -40,16 +54,21 @@ static unsigned int __get_maxsize(int fd)
     return max_size;
 }
 
-static int __load(int fd,
-                  unsigned int max_size,
-                  unsigned int *head,
-                  unsigned int *count,
-                  unsigned int *bytes_inuse)
+#if 0
+static int __load(
+    dqueue_t* me
+    )
+//        int fd,
+//        unsigned int max_size,
+//        unsigned int *head,
+//        unsigned int *count,
+//        unsigned int *bytes_inuse)
 {
     unsigned int lowest_id = UINT_MAX;
     unsigned int pos = 0;
+    int fd = me->fd;
 
-    while (pos < max_size)
+    while (pos < me->max_size)
     {
         int ret;
         header_t h;
@@ -98,6 +117,37 @@ static int __load(int fd,
 
     return 0;
 }
+#endif
+
+#define handle_error(msg) \
+    do { perror(msg); exit(EXIT_FAILURE); } while (0)
+
+static void __create_buffer_mirror(int fd, char* data, unsigned int size)
+{
+    char* r = mmap(data + size, size, PROT_READ | PROT_WRITE,
+                   MAP_FIXED | MAP_SHARED, fd, 0);
+    if (r != data + size)
+        handle_error("mmap mirror");
+}
+
+/**
+ * We want to interface with the file using mmap */
+static char* __open_mmap(int fd)
+{
+    /* obtain file size */
+    struct stat sb;
+
+    if (fstat(fd, &sb) == -1)
+        handle_error("fstat");
+
+    char *addr;
+
+    addr = mmap(NULL, sb.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+    if (addr == MAP_FAILED)
+        handle_error("mmap");
+
+    return addr;
+}
 
 dqueue_t* dqueuer_open(const char* path)
 {
@@ -119,16 +169,19 @@ dqueue_t* dqueuer_open(const char* path)
     unsigned int count = 0;
     unsigned int bytes_inuse = 0;
 
-    int ret = __load(fd, max_size, &head, &count, &bytes_inuse);
-    if (-1 == ret)
-        return NULL;
-
     dqueue_t* me = calloc(1, sizeof(dqueue_t));
+    me->data = __open_mmap(fd);
+    __create_buffer_mirror(fd, me->data, max_size);
     me->fd = fd;
     me->count = count;
     me->pos = head;
     me->inuse = bytes_inuse;
-    me->max_size = __get_maxsize(fd);
+    me->max_size = max_size;
+    me->items = arrayqueue_new(16);
+
+//    item_t* items = __load(me);
+
+    me->head = me->tail = 0;
 
     lseek(fd, head, SEEK_SET);
 
@@ -169,7 +222,6 @@ dqueue_t* dqueuew_open(const char* path, size_t max_size)
         return NULL;
 
     int fd;
-    unsigned int head = 0;
     unsigned int count = 0;
     unsigned int bytes_inuse = 0;
 
@@ -177,9 +229,9 @@ dqueue_t* dqueuew_open(const char* path, size_t max_size)
     {
         fd = open(path, O_RDWR | O_SYNC);
         max_size = __get_maxsize(fd);
-        int ret = __load(fd, max_size, &head, &count, &bytes_inuse);
-        if (-1 == ret)
-            return NULL;
+        //int ret = __load(fd, max_size, &head, &count, &bytes_inuse);
+        //if (-1 == ret)
+        //    return NULL;
     }
     else
     {
@@ -197,10 +249,13 @@ dqueue_t* dqueuew_open(const char* path, size_t max_size)
     }
 
     dqueue_t* me = calloc(1, sizeof(dqueue_t));
+    me->data = __open_mmap(fd);
+    __create_buffer_mirror(fd, me->data, max_size);
     me->fd = fd;
     me->count = count;
     me->max_size = max_size;
     me->inuse = bytes_inuse;
+    me->items = arrayqueue_new(16);
     return me;
 }
 
@@ -214,6 +269,8 @@ unsigned int dqueue_bytes_used(dqueue_t* me)
     return me->inuse;
 }
 
+
+
 int dqueue_offer(dqueue_t* me, const char* buf, size_t len)
 {
     header_t h;
@@ -222,7 +279,7 @@ int dqueue_offer(dqueue_t* me, const char* buf, size_t len)
     size_t space_required = ITEM_METADATA_SIZE + len + padding_required;
 //    size_t space_unusable = me->max_size ITEM_METADATA_SIZE + len + padding_required;
 
-    if (me->max_size < me->inuse + space_required)
+    if (me->max_size < dqueue_usedspace(me) + space_required)
         return -1;
 
     /* we don't want an item to have a header on the back and a footer on the
@@ -231,41 +288,26 @@ int dqueue_offer(dqueue_t* me, const char* buf, size_t len)
 //    if (me->max_size < me->pos + space_required)
 //        me->pos = 0;
 
-    int bytes;
+    int start = me->tail;
 
     /* 1. write header */
     memcpy(h.stamp, STAMP, strlen(STAMP));
     h.type = htonl(HEADER);
     h.len = htonl(len);
     h.id = htonl(me->item_id);
-    bytes = write(me->fd, &h, sizeof(header_t));
-    if (bytes < (int)sizeof(header_t))
-    {
-        perror("Couldn't write to file\n");
-        return -1;
-    }
+    memcpy(me->data + me->tail, &h, sizeof(header_t));
+    me->tail += sizeof(header_t);
 
     /* 2. write data */
-    bytes = write(me->fd, buf, len);
-    if (bytes < (int)len)
-    {
-        perror("Couldn't write to file\n");
-        return -1;
-    }
-
-    lseek(me->fd, padding_required, SEEK_CUR);
+    memcpy(me->data + me->tail, buf, len);
 
     /* 3. write footer */
     h.type = htonl(FOOTER);
-    bytes = write(me->fd, &h, sizeof(header_t));
-    if (bytes < (int)sizeof(header_t))
-    {
-        perror("Couldn't write to file\n");
-        return -1;
-    }
+    me->tail += len + padding_required;
+    memcpy(me->data + me->tail, &h, sizeof(header_t));
 
     /* durability */
-    int ret = fsync(me->fd);
+    int ret = msync(me->data, space_required, MS_SYNC);
     if (-1 == ret)
     {
         perror("Couldn't fsync file\n");
@@ -274,7 +316,11 @@ int dqueue_offer(dqueue_t* me, const char* buf, size_t len)
 
     me->inuse += space_required;
     me->count++;
-    me->item_id++;
+
+    item_t* item = malloc(sizeof(item_t));
+    item->pos = start;
+    item->pos = space_required;
+    arrayqueue_offer(me->items, item);
     return 0;
 }
 
@@ -283,18 +329,10 @@ int dqueue_poll(dqueue_t * me)
     header_t h;
 
     memset(&h, 0, sizeof(header_t));
-
-    ssize_t bytes;
-
-    bytes = write(me->fd, &h, sizeof(header_t));
-    if (bytes < (int)sizeof(header_t))
-    {
-        perror("Couldn't write to file\n");
-        return -1;
-    }
+    memcpy(me->data + me->head, &h, sizeof(header_t));
 
     // TODO: replace with fdatasync()
-    int ret = fsync(me->fd);
+    int ret = msync(me->data, sizeof(header_t), MS_SYNC);
     if (-1 == ret)
     {
         perror("Couldn't fsync file\n");
@@ -302,6 +340,12 @@ int dqueue_poll(dqueue_t * me)
     }
 
     me->count--;
+
+    item_t* item = arrayqueue_poll(me->items);
+    me->head += item->len;
+    free(item);
+    if (me->max_size < me->head)
+        me->head %= me->max_size;
 
     return 0;
 }
@@ -316,4 +360,22 @@ int dqueue_peek(dqueue_t * me, const char* path, char* data, size_t len)
 int dqueue_is_empty(dqueue_t * me)
 {
     return me->count == 0;
+}
+
+int dqueue_size(const dqueue_t *me)
+{
+    return me->max_size;
+}
+
+int dqueue_usedspace(const dqueue_t *me)
+{
+    if (me->head <= me->tail)
+        return me->tail - me->head;
+    else
+        return dqueue_size(me) - (me->head - me->tail);
+}
+
+int dqueue_unusedspace(const dqueue_t *me)
+{
+    return dqueue_size(me) - dqueue_usedspace(me);
 }

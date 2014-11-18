@@ -12,7 +12,7 @@ void Testdqueue_new_is_empty(CuTest * tc)
 {
     remove("tmp.queue");
 
-    void *wqu = dqueuew_open("tmp.queue", 1024);
+    void *wqu = dqueuew_open("tmp.queue", 2 << 16);
     CuAssertTrue(tc, dqueue_is_empty(wqu));
     dqueue_free(wqu);
 }
@@ -25,12 +25,21 @@ void Testdqueue_new_must_be_multiple_of_32(CuTest * tc)
     CuAssertTrue(tc, NULL == wqu);
 }
 
+void Testdqueue_is_not_empty_after_offer(CuTest * tc)
+{
+    void *cb;
+
+    cb = dqueuew_open("tmp.queue", 2 << 16);
+    cbuf_offer(cb, (unsigned char*)"abcd", 4);
+    CuAssertTrue(tc, !cbuf_is_empty(cb));
+}
+
 void Testdqueue_offer_adds_new_item(CuTest * tc)
 {
     remove("tmp.queue");
 
     char *item = "testitem";
-    void *wqu = dqueuew_open("tmp.queue", 1024);
+    void *wqu = dqueuew_open("tmp.queue", 2 << 16);
 
     dqueue_offer(wqu, item, 8);
     CuAssertTrue(tc, 1 == dqueue_count(wqu));
@@ -45,7 +54,7 @@ void Testdqueue_offer_adds_three_items(CuTest * tc)
     item[0] = strdup("testitem");
     item[1] = strdup("anotheritem");
     item[2] = strdup("anotheritem");
-    void *wqu = dqueuew_open("tmp.queue", 1024);
+    void *wqu = dqueuew_open("tmp.queue", 2 << 16);
 
     dqueue_offer(wqu, item[0], strlen(item[0]));
     dqueue_offer(wqu, item[1], strlen(item[1]));
@@ -73,13 +82,13 @@ void Testdqueue_writer_can_reopen(CuTest * tc)
     item[1] = strdup("anotheritem");
     item[2] = strdup("anotheritem");
 
-    wqu = dqueuew_open("tmp.queue", 1024);
+    wqu = dqueuew_open("tmp.queue", 2 << 16);
     dqueue_offer(wqu, item[0], strlen(item[0]));
     dqueue_offer(wqu, item[1], strlen(item[1]));
     CuAssertTrue(tc, 2 == dqueue_count(wqu));
     dqueue_free(wqu);
 
-    wqu = dqueuew_open("tmp.queue", 1024);
+    wqu = dqueuew_open("tmp.queue", 2 << 16);
     CuAssertTrue(tc, NULL != wqu);
     dqueue_offer(wqu, item[2], strlen(item[2]));
     CuAssertTrue(tc, 3 == dqueue_count(wqu));
@@ -95,13 +104,13 @@ void Testdqueue_cannot_offer_over_capacity(CuTest * tc)
     remove("tmp.queue");
 
     char *item = malloc(2048);
-    void *wqu = dqueuew_open("tmp.queue", 1024);
+    void *wqu = dqueuew_open("tmp.queue", 2 << 16);
     int i;
 
     for (i = 0; i < 2048; i++)
         item[i] = 'c';
 
-    CuAssertTrue(tc, -1 == dqueue_offer(wqu, item, 2048));
+    CuAssertTrue(tc, -1 == dqueue_offer(wqu, item, 2 << 16));
     CuAssertTrue(tc, 0 == dqueue_count(wqu));
     dqueue_free(wqu);
 }
