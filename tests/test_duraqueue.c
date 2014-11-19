@@ -111,7 +111,7 @@ void Testdqueue_offer_adds_three_items(CuTest * tc)
     CuAssertTrue(tc, 64 * 3 +
                  strlen(item[0]) +
                  strlen(item[1]) +
-                 strlen(item[2]) == dqueue_bytes_used(rqu));
+                 strlen(item[2]) == (unsigned int)dqueue_usedspace(rqu));
 
     dqueue_free(wqu);
 }
@@ -139,7 +139,7 @@ void Testdqueue_writer_can_reopen(CuTest * tc)
     CuAssertTrue(tc, 64 * 3 +
                  strlen(item[0]) +
                  strlen(item[1]) +
-                 strlen(item[2]) == dqueue_bytes_used(wqu));
+                 strlen(item[2]) == (unsigned int)dqueue_usedspace(wqu));
     dqueue_free(wqu);
 }
 

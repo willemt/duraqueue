@@ -11,7 +11,7 @@ main.c:
 
 test: main.c duraqueue.c deps/arrayqueue/arrayqueue.c tests/test_duraqueue.c tests/CuTest.c main.c
 	$(CC) $(CCFLAGS) -o $@ $^
-	./test
+#	./test
 	gcov duraqueue.c
 
 clean:

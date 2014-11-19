@@ -35,6 +35,7 @@ typedef struct
 {
     unsigned int pos;
     unsigned int len;
+    unsigned int id;
 } item_t;
 
 #define ITEM_METADATA_SIZE sizeof(header_t) + sizeof(header_t)
@@ -54,35 +55,29 @@ static unsigned int __get_maxsize(int fd)
     return max_size;
 }
 
-#if 0
-static int __load(
-    dqueue_t* me
-    )
-//        int fd,
-//        unsigned int max_size,
-//        unsigned int *head,
-//        unsigned int *count,
-//        unsigned int *bytes_inuse)
+static int __load(dqueue_t* me)
 {
-    unsigned int lowest_id = UINT_MAX;
     unsigned int pos = 0;
     int fd = me->fd;
 
-    while (pos < me->max_size)
+    while (pos < me->size)
     {
-        int ret;
+        int ret, start_pos;
         header_t h;
+
+        start_pos = pos;
 
         /* 1. read first header */
         ret = read(fd, &h, sizeof(header_t));
         if (ret < (int)sizeof(header_t))
-            break;
+            return -1;
         pos += sizeof(header_t);
 
+        /* check header is ok */
         if (h.type != HEADER || 0 != memcmp(h.stamp, STAMP, strlen(STAMP)))
             continue;
 
-        unsigned int id = h.id;
+        unsigned int check_id = h.id;
 
         /* 2. read 2nd header */
         /* put on sizeof(header_t) offset */
@@ -98,26 +93,63 @@ static int __load(
         }
         pos += sizeof(header_t);
 
-        if (h.id != id || ntohl(h.type) != FOOTER || 0 !=
+        if (h.id != check_id || ntohl(h.type) != FOOTER || 0 !=
             memcmp(h.stamp, STAMP, strlen(STAMP)))
             continue;
 
         /* found a valid queue item */
 
-        *count += 1;
-        *bytes_inuse += ITEM_METADATA_SIZE + ntohl(h.len);
+        me->count += 1;
+
+        item_t* item = malloc(sizeof(item_t));
+        item->pos = start_pos;
+        item->pos = h.len + ITEM_METADATA_SIZE;
+        item->id = h.id;
+        arrayqueue_offer(me->items, item);
 
         h.id = ntohl(h.id);
-        if (h.id < lowest_id)
+    }
+
+    if (0 == me->count)
+        return 0;
+
+    /* get lowest */
+    unsigned int lowest_id = UINT_MAX;
+    arrayqueue_iterator_t iter;
+    for (arrayqueue_iterator(me->items, &iter);
+         arrayqueue_iterator_has_next(me->items, &iter); )
+    {
+        item_t* item = arrayqueue_iterator_next(me->items, &iter);
+        if (item->id < lowest_id)
         {
-            lowest_id = h.id;
-            *head = pos - ITEM_METADATA_SIZE - ntohl(h.len);
+            lowest_id = item->id;
+            me->head = item->pos;
         }
     }
 
+    void* stowaway = arrayqueue_new(16);
+
+    /* put lowest at front of queue */
+    while (1)
+    {
+        item_t* item = arrayqueue_peek(me->items);
+        if (item->id == lowest_id)
+            break;
+        arrayqueue_offer(stowaway, arrayqueue_poll(me->items));
+    }
+
+    /* empty out stowaway */
+    while (!arrayqueue_is_empty(stowaway))
+        arrayqueue_offer(me->items, arrayqueue_poll(stowaway));
+
+    arrayqueue_free(stowaway);
+
+    /* get tail info */
+    item_t* tail = arrayqueue_peek(me->items);
+    me->tail = tail->pos + tail->len;
+
     return 0;
 }
-#endif
 
 #define handle_error(msg) \
     do { perror(msg); exit(EXIT_FAILURE); } while (0)
@@ -165,25 +197,21 @@ dqueue_t* dqueuer_open(const char* path)
     }
 
     unsigned int max_size = __get_maxsize(fd);
-    unsigned int head = 0;
-    unsigned int count = 0;
-    unsigned int bytes_inuse = 0;
 
     dqueue_t* me = calloc(1, sizeof(dqueue_t));
-    me->data = __open_mmap(fd);
-    __create_buffer_mirror(fd, me->data, max_size);
     me->fd = fd;
-    me->count = count;
-    me->pos = head;
-    me->inuse = bytes_inuse;
-    me->max_size = max_size;
+    me->count = 0;
+    me->pos = 0;
+    me->size = max_size;
     me->items = arrayqueue_new(16);
-
-//    item_t* items = __load(me);
-
     me->head = me->tail = 0;
 
-    lseek(fd, head, SEEK_SET);
+    __load(me);
+
+    me->data = __open_mmap(fd);
+    __create_buffer_mirror(fd, me->data, max_size);
+
+    lseek(fd, me->head, SEEK_SET);
 
     return me;
 }
@@ -222,13 +250,17 @@ dqueue_t* dqueuew_open(const char* path, size_t max_size)
         return NULL;
 
     int fd;
-    unsigned int count = 0;
-    unsigned int bytes_inuse = 0;
+
+    dqueue_t* me = calloc(1, sizeof(dqueue_t));
+    me->count = 0;
+    me->items = arrayqueue_new(16);
 
     if (access(path, F_OK ) != -1)
     {
         fd = open(path, O_RDWR | O_SYNC);
-        max_size = __get_maxsize(fd);
+        me->size = __get_maxsize(fd);
+        me->fd = fd;
+        __load(me);
         //int ret = __load(fd, max_size, &head, &count, &bytes_inuse);
         //if (-1 == ret)
         //    return NULL;
@@ -246,16 +278,14 @@ dqueue_t* dqueuew_open(const char* path, size_t max_size)
         int ret = __create_stub_file(fd, max_size);
         if (-1 == ret)
             return NULL;
+
+        me->size = max_size;
     }
 
-    dqueue_t* me = calloc(1, sizeof(dqueue_t));
+    me->fd = fd;
     me->data = __open_mmap(fd);
     __create_buffer_mirror(fd, me->data, max_size);
-    me->fd = fd;
-    me->count = count;
-    me->max_size = max_size;
-    me->inuse = bytes_inuse;
-    me->items = arrayqueue_new(16);
+
     return me;
 }
 
@@ -264,12 +294,10 @@ unsigned int dqueue_count(dqueue_t* me)
     return me->count;
 }
 
-unsigned int dqueue_bytes_used(dqueue_t* me)
-{
-    return me->inuse;
-}
-
-
+//unsigned int dqueue_bytes_used(dqueue_t* me)
+//{
+//    return me->inuse;
+//}
 
 int dqueue_offer(dqueue_t* me, const char* buf, size_t len)
 {
@@ -277,16 +305,9 @@ int dqueue_offer(dqueue_t* me, const char* buf, size_t len)
 
     size_t padding_required = sizeof(header_t) - len % sizeof(header_t);
     size_t space_required = ITEM_METADATA_SIZE + len + padding_required;
-//    size_t space_unusable = me->max_size ITEM_METADATA_SIZE + len + padding_required;
 
-    if (me->max_size < dqueue_usedspace(me) + space_required)
+    if (me->size < dqueue_usedspace(me) + space_required)
         return -1;
-
-    /* we don't want an item to have a header on the back and a footer on the
-     * front of the "array". It prevents the reader from having clean single
-     * reads */
-//    if (me->max_size < me->pos + space_required)
-//        me->pos = 0;
 
     int start = me->tail;
 
@@ -314,12 +335,13 @@ int dqueue_offer(dqueue_t* me, const char* buf, size_t len)
         return -1;
     }
 
-    me->inuse += space_required;
+//    me->inuse += space_required;
     me->count++;
 
     item_t* item = malloc(sizeof(item_t));
     item->pos = start;
-    item->pos = space_required;
+    item->len = space_required;
+    item->id = me->item_id++;
     arrayqueue_offer(me->items, item);
     return 0;
 }
@@ -344,8 +366,8 @@ int dqueue_poll(dqueue_t * me)
     item_t* item = arrayqueue_poll(me->items);
     me->head += item->len;
     free(item);
-    if (me->max_size < me->head)
-        me->head %= me->max_size;
+    if (me->size < me->head)
+        me->head %= me->size;
 
     return 0;
 }
@@ -364,7 +386,7 @@ int dqueue_is_empty(dqueue_t * me)
 
 int dqueue_size(const dqueue_t *me)
 {
-    return me->max_size;
+    return me->size;
 }
 
 int dqueue_usedspace(const dqueue_t *me)

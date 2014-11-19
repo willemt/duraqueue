@@ -7,13 +7,13 @@ typedef struct
 
     void* data;
 
-    size_t max_size;
+    size_t size;
 
     /* number of items within queue */
     unsigned int count;
 
     /* bytes inuse */
-    unsigned int inuse;
+//    unsigned int inuse;
 
     unsigned int fd;
 
@@ -50,10 +50,6 @@ dqueue_t* dqueuew_open(const char* path, size_t max_size);
 unsigned int dqueue_count(dqueue_t* me);
 
 /**
- * @return number of bytes used (includes metadata) */
-unsigned int dqueue_bytes_used(dqueue_t* me);
-
-/**
  * @return 0 on successful write to disk */
 int dqueue_offer(dqueue_t* me, const char* buf, size_t len);
 
@@ -69,6 +65,8 @@ int dqueue_is_empty(dqueue_t* me);
 
 int dqueue_size(const dqueue_t *me);
 
+/**
+ * @return number of bytes used (includes metadata) */
 int dqueue_usedspace(const dqueue_t *me);
 
 int dqueue_unusedspace(const dqueue_t *me);
