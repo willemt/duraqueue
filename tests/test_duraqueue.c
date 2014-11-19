@@ -27,12 +27,56 @@ void Testdqueue_new_must_be_multiple_of_32(CuTest * tc)
 
 void Testdqueue_is_not_empty_after_offer(CuTest * tc)
 {
-    void *cb;
+    remove("tmp.queue");
 
-    cb = dqueuew_open("tmp.queue", 2 << 16);
-    cbuf_offer(cb, (unsigned char*)"abcd", 4);
-    CuAssertTrue(tc, !cbuf_is_empty(cb));
+    void *qu = dqueuew_open("tmp.queue", 2 << 16);
+    dqueue_offer(qu, "abcd", 4);
+    CuAssertTrue(tc, !dqueue_is_empty(qu));
 }
+
+void Testdqueue_is_empty_after_poll(CuTest * tc)
+{
+    remove("tmp.queue");
+
+    void *qu = dqueuew_open("tmp.queue", 2 << 16);
+    dqueue_offer(qu, "abcd", 4);
+    dqueue_poll(qu);
+    CuAssertTrue(tc, dqueue_is_empty(qu));
+}
+
+void Testdqueue_spaceused_is_zero_after_poll(CuTest * tc)
+{
+    remove("tmp.queue");
+
+    void *qu = dqueuew_open("tmp.queue", 2 << 16);
+    dqueue_offer(qu, "abcd", 4);
+    dqueue_poll(qu);
+    CuAssertTrue(tc, 0 == dqueue_usedspace(qu));
+}
+
+void Testdqueue_is_empty_after_2polls(CuTest * tc)
+{
+    remove("tmp.queue");
+
+    void *qu = dqueuew_open("tmp.queue", 2 << 16);
+    dqueue_offer(qu, "abcd", 4);
+    dqueue_offer(qu, "abcd", 4);
+    dqueue_poll(qu);
+    CuAssertTrue(tc, !dqueue_is_empty(qu));
+    dqueue_poll(qu);
+    CuAssertTrue(tc, dqueue_is_empty(qu));
+}
+
+// FIXME
+#if 0
+void Txestdqueue_cant_poll_nonexistant(CuTest * tc)
+{
+    remove("tmp.queue");
+
+    void *qu = dqueuew_open("tmp.queue", 2 << 16);
+    dqueue_poll(qu);
+}
+#endif
 
 void Testdqueue_offer_adds_new_item(CuTest * tc)
 {
@@ -113,6 +157,13 @@ void Testdqueue_cannot_offer_over_capacity(CuTest * tc)
     CuAssertTrue(tc, -1 == dqueue_offer(wqu, item, 2 << 16));
     CuAssertTrue(tc, 0 == dqueue_count(wqu));
     dqueue_free(wqu);
+}
+
+void Testdqueue_cant_offer_if_not_enough_space_full(CuTest * tc)
+{
+    remove("tmp.queue");
+    void *qu = dqueuew_open("tmp.queue", 2 << 16);
+    CuAssertTrue(tc, 0 == dqueue_offer(qu, "1000", 1 << 17));
 }
 
 #if 0
