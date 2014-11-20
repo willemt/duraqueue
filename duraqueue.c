@@ -58,7 +58,6 @@ static unsigned int __get_maxsize(int fd)
 static int __load(dqueue_t* me)
 {
     unsigned int pos = 0;
-    int fd = me->fd;
 
     while (pos < me->size)
     {
@@ -68,7 +67,7 @@ static int __load(dqueue_t* me)
         start_pos = pos;
 
         /* 1. read first header */
-        ret = read(fd, &h, sizeof(header_t));
+        ret = read(me->fd, &h, sizeof(header_t));
         if (ret < (int)sizeof(header_t))
             return -1;
         pos += sizeof(header_t);
@@ -82,10 +81,10 @@ static int __load(dqueue_t* me)
         /* 2. read 2nd header */
         /* put on sizeof(header_t) offset */
         size_t offset = sizeof(header_t) - ntohl(h.len) % sizeof(header_t);
-        ret = lseek(fd, ntohl(h.len) + offset, SEEK_CUR);
+        ret = lseek(me->fd, ntohl(h.len) + offset, SEEK_CUR);
         pos += ntohl(h.len);
 
-        ret = read(fd, &h, sizeof(header_t));
+        ret = read(me->fd, &h, sizeof(header_t));
         if (ret < (int)sizeof(header_t))
         {
             perror("couldn't read file\n");
@@ -99,8 +98,6 @@ static int __load(dqueue_t* me)
 
         /* found a valid queue item */
 
-        me->count += 1;
-
         item_t* item = malloc(sizeof(item_t));
         item->pos = start_pos;
         item->pos = h.len + ITEM_METADATA_SIZE;
@@ -110,7 +107,7 @@ static int __load(dqueue_t* me)
         h.id = ntohl(h.id);
     }
 
-    if (0 == me->count)
+    if (0 == arrayqueue_count(me->items))
         return 0;
 
     /* get lowest */
@@ -183,35 +180,33 @@ static char* __open_mmap(int fd)
 
 dqueue_t* dqueuer_open(const char* path)
 {
+    dqueue_t* me = calloc(1, sizeof(dqueue_t));
+
     if (access(path, F_OK) != 0)
     {
         perror("file doesn't exist\n");
         return NULL;
     }
 
-    int fd = open(path, O_RDWR | O_SYNC);
-    if (fd == -1)
+    me->fd = open(path, O_RDWR | O_SYNC);
+    if (me->fd == -1)
     {
         perror("couldn't open file\n");
         return NULL;
     }
 
-    unsigned int max_size = __get_maxsize(fd);
+    unsigned int max_size = __get_maxsize(me->fd);
 
-    dqueue_t* me = calloc(1, sizeof(dqueue_t));
-    me->fd = fd;
-    me->count = 0;
-    me->pos = 0;
     me->size = max_size;
     me->items = arrayqueue_new(16);
     me->head = me->tail = 0;
 
     __load(me);
 
-    me->data = __open_mmap(fd);
-    __create_buffer_mirror(fd, me->data, max_size);
+    me->data = __open_mmap(me->fd);
+    __create_buffer_mirror(me->fd, me->data, max_size);
 
-    lseek(fd, me->head, SEEK_SET);
+    lseek(me->fd, me->head, SEEK_SET);
 
     return me;
 }
@@ -249,49 +244,42 @@ dqueue_t* dqueuew_open(const char* path, size_t max_size)
     if (max_size % sizeof(header_t) != 0)
         return NULL;
 
-    int fd;
-
     dqueue_t* me = calloc(1, sizeof(dqueue_t));
-    me->count = 0;
+    me->head = me->tail = 0;
     me->items = arrayqueue_new(16);
 
     if (access(path, F_OK ) != -1)
     {
-        fd = open(path, O_RDWR | O_SYNC);
-        me->size = __get_maxsize(fd);
-        me->fd = fd;
+        me->fd = open(path, O_RDWR | O_SYNC);
+        me->size = __get_maxsize(me->fd);
         __load(me);
-        //int ret = __load(fd, max_size, &head, &count, &bytes_inuse);
-        //if (-1 == ret)
-        //    return NULL;
     }
     else
     {
-        fd = open(path, O_RDWR | O_SYNC | O_CREAT, 0777);
-        if (-1 == fd)
+        me->fd = open(path, O_RDWR | O_SYNC | O_CREAT, 0777);
+        if (-1 == me->fd)
         {
             perror("couldn't open file\n");
             return NULL;
         }
 
         /* create a stub file */
-        int ret = __create_stub_file(fd, max_size);
+        int ret = __create_stub_file(me->fd, max_size);
         if (-1 == ret)
             return NULL;
 
         me->size = max_size;
     }
 
-    me->fd = fd;
-    me->data = __open_mmap(fd);
-    __create_buffer_mirror(fd, me->data, max_size);
+    me->data = __open_mmap(me->fd);
+    __create_buffer_mirror(me->fd, me->data, max_size);
 
     return me;
 }
 
 unsigned int dqueue_count(dqueue_t* me)
 {
-    return me->count;
+    return arrayqueue_count(me->items);
 }
 
 //unsigned int dqueue_bytes_used(dqueue_t* me)
@@ -336,8 +324,6 @@ int dqueue_offer(dqueue_t* me, const char* buf, size_t len)
     }
 
 //    me->inuse += space_required;
-    me->count++;
-
     item_t* item = malloc(sizeof(item_t));
     item->pos = start;
     item->len = space_required;
@@ -361,8 +347,6 @@ int dqueue_poll(dqueue_t * me)
         return -1;
     }
 
-    me->count--;
-
     item_t* item = arrayqueue_poll(me->items);
     me->head += item->len;
     free(item);
@@ -381,7 +365,7 @@ int dqueue_peek(dqueue_t * me, const char* path, char* data, size_t len)
 
 int dqueue_is_empty(dqueue_t * me)
 {
-    return me->count == 0;
+    return arrayqueue_count(me->items) == 0;
 }
 
 int dqueue_size(const dqueue_t *me)

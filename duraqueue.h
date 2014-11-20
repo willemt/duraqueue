@@ -9,16 +9,7 @@ typedef struct
 
     size_t size;
 
-    /* number of items within queue */
-    unsigned int count;
-
-    /* bytes inuse */
-//    unsigned int inuse;
-
-    unsigned int fd;
-
-    /* file cursor pos in bytes */
-    unsigned int pos;
+    int fd;
 
     /* monotonic id for queue items */
     unsigned int item_id;

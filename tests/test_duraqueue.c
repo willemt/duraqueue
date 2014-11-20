@@ -14,6 +14,7 @@ void Testdqueue_new_is_empty(CuTest * tc)
 
     void *wqu = dqueuew_open("tmp.queue", 2 << 16);
     CuAssertTrue(tc, dqueue_is_empty(wqu));
+    CuAssertTrue(tc, 0 == dqueue_usedspace(wqu));
     dqueue_free(wqu);
 }
 
@@ -42,6 +43,15 @@ void Testdqueue_is_empty_after_poll(CuTest * tc)
     dqueue_offer(qu, "abcd", 4);
     dqueue_poll(qu);
     CuAssertTrue(tc, dqueue_is_empty(qu));
+}
+
+void Testdqueue_spaceused_is_nonzero_after_offer(CuTest * tc)
+{
+    remove("tmp.queue");
+
+    void *qu = dqueuew_open("tmp.queue", 2 << 16);
+    dqueue_offer(qu, "abcd", 4);
+    CuAssertTrue(tc, 0 != dqueue_usedspace(qu));
 }
 
 void Testdqueue_spaceused_is_zero_after_poll(CuTest * tc)
