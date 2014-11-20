@@ -352,8 +352,6 @@ int dqueue_poll(dqueue_t * me)
     item_t* item = arrayqueue_poll(me->items);
     me->head += item->len;
 
-    printf("me->head: %d %d\n", me->head, me->tail);
-
     free(item);
     if (me->size < me->head)
         me->head %= me->size;
