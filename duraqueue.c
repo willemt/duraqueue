@@ -171,7 +171,7 @@ static char* __open_mmap(int fd)
 
     char *addr;
 
-    addr = mmap(NULL, sb.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+    addr = mmap(NULL, sb.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (addr == MAP_FAILED)
         handle_error("mmap");
 
@@ -195,18 +195,17 @@ dqueue_t* dqueuer_open(const char* path)
         return NULL;
     }
 
-    unsigned int max_size = __get_maxsize(me->fd);
-
-    me->size = max_size;
+    me->size = __get_maxsize(me->fd);
     me->items = arrayqueue_new(16);
     me->head = me->tail = 0;
 
     __load(me);
 
-    me->data = __open_mmap(me->fd);
-    __create_buffer_mirror(me->fd, me->data, max_size);
-
     lseek(me->fd, me->head, SEEK_SET);
+
+    me->data = __open_mmap(me->fd);
+    __create_buffer_mirror(me->fd, me->data, me->size);
+
 
     return me;
 }
@@ -272,7 +271,7 @@ dqueue_t* dqueuew_open(const char* path, size_t max_size)
     }
 
     me->data = __open_mmap(me->fd);
-    __create_buffer_mirror(me->fd, me->data, max_size);
+    //__create_buffer_mirror(me->fd, me->data, max_size);
 
     return me;
 }
