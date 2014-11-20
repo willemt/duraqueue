@@ -118,11 +118,6 @@ void Testdqueue_offer_adds_three_items(CuTest * tc)
     void *rqu = dqueuer_open("tmp.queue");
     CuAssertTrue(tc, NULL != rqu);
     CuAssertTrue(tc, 3 == dqueue_count(rqu));
-    CuAssertTrue(tc, 64 * 3 +
-                 strlen(item[0]) +
-                 strlen(item[1]) +
-                 strlen(item[2]) == (unsigned int)dqueue_usedspace(rqu));
-
     dqueue_free(wqu);
 }
 
@@ -169,7 +164,7 @@ void Testdqueue_cant_offer_if_not_enough_space_full(CuTest * tc)
 {
     remove("tmp.queue");
     void *qu = dqueuew_open("tmp.queue", 1 << 13);
-    CuAssertTrue(tc, 0 == dqueue_offer(qu, "1000", 1 << 17));
+    CuAssertTrue(tc, -1 == dqueue_offer(qu, "1000", 1 << 17));
 }
 
 #if 0
