@@ -167,6 +167,29 @@ void Testdqueue_cant_offer_if_not_enough_space_full(CuTest * tc)
     CuAssertTrue(tc, -1 == dqueue_offer(qu, "1000", 1 << 17));
 }
 
+void Testdqueue_cannot_offer_over_boundary(CuTest * tc)
+{
+    remove("tmp.queue");
+
+    char *item = malloc(4096);
+    char *item2 = malloc(6000);
+    void *wqu = dqueuew_open("tmp.queue", 1 << 13);
+    int i;
+
+    for (i = 0; i < 4096; i++)
+        item[i] = 'a';
+
+    for (i = 0; i < 6000; i++)
+        item2[i] = 'b';
+
+    CuAssertTrue(tc, 0 == dqueue_offer(wqu, item, 4096));
+    CuAssertTrue(tc, 0 == dqueue_poll(wqu));
+    CuAssertTrue(tc, 0 == dqueue_offer(wqu, item, 8192));
+    CuAssertTrue(tc, 0 == dqueue_count(wqu));
+    dqueue_free(wqu);
+}
+
+
 #if 0
 void Txestdqueue_peek_gets_head(CuTest * tc)
 {

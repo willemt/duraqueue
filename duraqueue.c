@@ -206,7 +206,6 @@ dqueue_t* dqueuer_open(const char* path)
     me->data = __open_mmap(me->fd);
     __create_buffer_mirror(me->fd, me->data, me->size);
 
-
     return me;
 }
 
@@ -271,7 +270,7 @@ dqueue_t* dqueuew_open(const char* path, size_t max_size)
     }
 
     me->data = __open_mmap(me->fd);
-    //__create_buffer_mirror(me->fd, me->data, max_size);
+    __create_buffer_mirror(me->fd, me->data, max_size);
 
     return me;
 }
@@ -324,7 +323,6 @@ int dqueue_offer(dqueue_t* me, const char* buf, size_t len)
 
     me->tail += sizeof(header_t);
 
-//    me->inuse += space_required;
     item_t* item = malloc(sizeof(item_t));
     item->pos = start;
     item->len = space_required;
