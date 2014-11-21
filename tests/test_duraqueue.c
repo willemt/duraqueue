@@ -167,7 +167,7 @@ void Testdqueue_cant_offer_if_not_enough_space_full(CuTest * tc)
     CuAssertTrue(tc, -1 == dqueue_offer(qu, "1000", 1 << 17));
 }
 
-void Testdqueue_cannot_offer_over_boundary(CuTest * tc)
+void Testdqueue_can_offer_over_boundary(CuTest * tc)
 {
     remove("tmp.queue");
 
@@ -184,8 +184,9 @@ void Testdqueue_cannot_offer_over_boundary(CuTest * tc)
 
     CuAssertTrue(tc, 0 == dqueue_offer(wqu, item, 4096));
     CuAssertTrue(tc, 0 == dqueue_poll(wqu));
-    CuAssertTrue(tc, 0 == dqueue_offer(wqu, item, 8192));
-    CuAssertTrue(tc, 0 == dqueue_count(wqu));
+    printf("%d %d\n", dqueue_usedspace(wqu), dqueue_unusedspace(wqu));
+    CuAssertTrue(tc, 0 == dqueue_offer(wqu, item, 6000));
+    CuAssertTrue(tc, 1 == dqueue_count(wqu));
     dqueue_free(wqu);
 }
 
