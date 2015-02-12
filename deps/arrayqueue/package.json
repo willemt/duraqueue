@@ -1,0 +1,9 @@
+{
+  "name": "arrayqueue",
+  "version": "0.0.1",
+  "repo": "willemt/arrayqueue",
+  "description": "Queue implemented using an array",
+  "keywords": ["queue"],
+  "license": "BSD",
+  "src": ["arrayqueue.c", "arrayqueue.h"]
+}

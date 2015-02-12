@@ -102,21 +102,21 @@ static int __load(dqueue_t* me)
         item->pos = start_pos;
         item->pos = h.len + ITEM_METADATA_SIZE;
         item->id = h.id;
-        arrayqueue_offer(me->items, item);
+        aqueue_offer(me->items, item);
 
         h.id = ntohl(h.id);
     }
 
-    if (0 == arrayqueue_count(me->items))
+    if (0 == aqueue_count(me->items))
         return 0;
 
     /* get lowest */
     unsigned int lowest_id = UINT_MAX;
-    arrayqueue_iterator_t iter;
-    for (arrayqueue_iterator(me->items, &iter);
-         arrayqueue_iterator_has_next(me->items, &iter); )
+    arrayqueue_iter_t iter;
+    for (aqueue_iter(me->items, &iter);
+         aqueue_iter_has_next(me->items, &iter); )
     {
-        item_t* item = arrayqueue_iterator_next(me->items, &iter);
+        item_t* item = aqueue_iter_next(me->items, &iter);
         if (item->id < lowest_id)
         {
             lowest_id = item->id;
@@ -124,25 +124,25 @@ static int __load(dqueue_t* me)
         }
     }
 
-    void* stowaway = arrayqueue_new(16);
+    void* stowaway = aqueue_new(16);
 
     /* put lowest at front of queue */
     while (1)
     {
-        item_t* item = arrayqueue_peek(me->items);
+        item_t* item = aqueue_peek(me->items);
         if (item->id == lowest_id)
             break;
-        arrayqueue_offer(stowaway, arrayqueue_poll(me->items));
+        aqueue_offer(stowaway, aqueue_poll(me->items));
     }
 
     /* empty out stowaway */
-    while (!arrayqueue_is_empty(stowaway))
-        arrayqueue_offer(me->items, arrayqueue_poll(stowaway));
+    while (!aqueue_is_empty(stowaway))
+        aqueue_offer(me->items, aqueue_poll(stowaway));
 
-    arrayqueue_free(stowaway);
+    aqueue_free(stowaway);
 
     /* get tail info */
-    item_t* tail = arrayqueue_peek(me->items);
+    item_t* tail = aqueue_peek(me->items);
     me->tail = tail->pos + tail->len;
 
     return 0;
@@ -170,7 +170,6 @@ static char* __open_mmap(int fd)
         handle_error("fstat");
 
     char *addr;
-
     addr = mmap(NULL, sb.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (addr == MAP_FAILED)
         handle_error("mmap");
@@ -196,7 +195,7 @@ dqueue_t* dqueuer_open(const char* path)
     }
 
     me->size = __get_maxsize(me->fd);
-    me->items = arrayqueue_new(16);
+    me->items = aqueue_new(16);
     me->head = me->tail = 0;
 
     __load(me);
@@ -244,7 +243,7 @@ dqueue_t* dqueuew_open(const char* path, size_t max_size)
 
     dqueue_t* me = calloc(1, sizeof(dqueue_t));
     me->head = me->tail = 0;
-    me->items = arrayqueue_new(16);
+    me->items = aqueue_new(16);
 
     if (access(path, F_OK ) != -1)
     {
@@ -277,13 +276,8 @@ dqueue_t* dqueuew_open(const char* path, size_t max_size)
 
 unsigned int dqueue_count(dqueue_t* me)
 {
-    return arrayqueue_count(me->items);
+    return aqueue_count(me->items);
 }
-
-//unsigned int dqueue_bytes_used(dqueue_t* me)
-//{
-//    return me->inuse;
-//}
 
 int dqueue_offer(dqueue_t* me, const char* buf, size_t len)
 {
@@ -314,7 +308,7 @@ int dqueue_offer(dqueue_t* me, const char* buf, size_t len)
     memcpy(me->data + me->tail, &h, sizeof(header_t));
 
     /* durability */
-    int ret = msync(me->data, space_required, MS_SYNC);
+    int ret = msync(me->data, space_required, MS_SYNC | MS_INVALIDATE);
     if (-1 == ret)
     {
         perror("Couldn't fsync file\n");
@@ -327,7 +321,7 @@ int dqueue_offer(dqueue_t* me, const char* buf, size_t len)
     item->pos = start;
     item->len = space_required;
     item->id = me->item_id++;
-    arrayqueue_offer(me->items, item);
+    aqueue_offer(me->items, item);
     return 0;
 }
 
@@ -339,14 +333,14 @@ int dqueue_poll(dqueue_t * me)
     memcpy(me->data + me->head, &h, sizeof(header_t));
 
     // TODO: replace with fdatasync()
-    int ret = msync(me->data, sizeof(header_t), MS_SYNC);
+    int ret = msync(me->data, sizeof(header_t), MS_SYNC | MS_INVALIDATE);
     if (-1 == ret)
     {
         perror("Couldn't fsync file\n");
         return -1;
     }
 
-    item_t* item = arrayqueue_poll(me->items);
+    item_t* item = aqueue_poll(me->items);
     me->head += item->len;
 
     free(item);
@@ -356,16 +350,9 @@ int dqueue_poll(dqueue_t * me)
     return 0;
 }
 
-#if 0
-int dqueue_peek(dqueue_t * me, const char* path, char* data, size_t len)
-{
-    return 0;
-}
-#endif
-
 int dqueue_is_empty(dqueue_t * me)
 {
-    return arrayqueue_count(me->items) == 0;
+    return aqueue_count(me->items) == 0;
 }
 
 int dqueue_size(const dqueue_t *me)
