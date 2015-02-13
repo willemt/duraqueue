@@ -1,0 +1,12 @@
+{
+  "name": "duraqueue",
+  "version": "0.0.1",
+  "repo": "willemt/duraqueue",
+  "description": "Dead simple queue with durability under failure",
+  "keywords": ["queue"],
+  "license": "BSD",
+  "src": ["src/duraqueue.c", "include/duraqueue.h"],
+  "dependencies": {
+    "willemt/arrayqueue": "*"
+  }
+}
