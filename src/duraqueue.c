@@ -96,6 +96,8 @@ static int __load(dqueue_t* me)
             perror("couldn't read file\n");
             return -1;
         }
+
+        pos += __padding_required(ntohl(h.len));
         pos += sizeof(header_t);
 
         if (h.id != check_id || ntohl(h.type) != FOOTER || 0 !=
@@ -106,9 +108,9 @@ static int __load(dqueue_t* me)
 
         item_t* item = malloc(sizeof(item_t));
         item->pos = start_pos;
-        item->len = h.len;
-        item->space_used = h.len + ITEM_METADATA_SIZE +
-                           __padding_required(h.len);
+        item->len = ntohl(h.len);
+        item->space_used = ntohl(h.len) + ITEM_METADATA_SIZE +
+                           __padding_required(ntohl(h.len));
         item->id = h.id;
         aqueue_offer(me->items, item);
 
