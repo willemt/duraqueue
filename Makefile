@@ -1,7 +1,7 @@
 GCOV_OUTPUT = *.gcda *.gcno *.gcov 
 GCOV_CCFLAGS = -fprofile-arcs -ftest-coverage
 CC     = gcc
-CCFLAGS = -I. -Iinclude -Ideps/arrayqueue -Itests -g -Wall -Werror -W -fno-omit-frame-pointer -fno-common -fsigned-char $(GCOV_CCFLAGS)
+CCFLAGS = -I. -Iinclude -Ideps/arrayqueue -Itests -g -Wall -Werror -W -fno-omit-frame-pointer -Wimplicit-function-declaration -fno-common -fsigned-char $(GCOV_CCFLAGS)
 
 
 all: test

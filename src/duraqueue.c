@@ -8,6 +8,10 @@
 #include <errno.h>
 #include <limits.h>
 
+/* for ntohl */
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <fcntl.h>
