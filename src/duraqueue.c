@@ -43,7 +43,7 @@ typedef struct
 
 static size_t __padding_required(size_t len)
 {
-    return sizeof(header_t) - len % sizeof(header_t);
+    return sizeof(header_t) - (len % sizeof(header_t));
 }
 
 int dqueue_free(dqueue_t* me)
@@ -122,6 +122,7 @@ static int __load(dqueue_t* me)
 
     /* get lowest */
     unsigned int lowest_id = UINT_MAX;
+    unsigned int highest_id = 0;
     arrayqueue_iter_t iter;
     for (aqueue_iter(me->items, &iter);
          aqueue_iter_has_next(me->items, &iter); )
@@ -131,6 +132,15 @@ static int __load(dqueue_t* me)
         {
             lowest_id = item->id;
             me->head = item->pos;
+        }
+
+        /* set tail */
+        if (highest_id < item->id)
+        {
+            highest_id = item->id;
+            me->tail = item->pos + item->len + ITEM_METADATA_SIZE +
+                       __padding_required(item->len);
+            me->item_id = item->id + 1;
         }
     }
 
@@ -150,10 +160,6 @@ static int __load(dqueue_t* me)
         aqueue_offer(me->items, aqueue_poll(stowaway));
 
     aqueue_free(stowaway);
-
-    /* get tail info */
-    item_t* tail = aqueue_peek(me->items);
-    me->tail = tail->pos + tail->len;
 
     return 0;
 }
