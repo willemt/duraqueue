@@ -35,11 +35,16 @@ typedef struct
 {
     unsigned int pos;
     unsigned int len;
-    unsigned int spaced_required;
+    unsigned int space_used;
     unsigned int id;
 } item_t;
 
 #define ITEM_METADATA_SIZE sizeof(header_t) + sizeof(header_t)
+
+static size_t __padding_required(size_t len)
+{
+    return sizeof(header_t) - len % sizeof(header_t);
+}
 
 int dqueue_free(dqueue_t* me)
 {
@@ -101,7 +106,9 @@ static int __load(dqueue_t* me)
 
         item_t* item = malloc(sizeof(item_t));
         item->pos = start_pos;
-        item->len = h.len + ITEM_METADATA_SIZE;
+        item->len = h.len;
+        item->space_used = h.len + ITEM_METADATA_SIZE +
+                           __padding_required(h.len);
         item->id = h.id;
         aqueue_offer(me->items, item);
 
@@ -280,12 +287,11 @@ unsigned int dqueue_count(dqueue_t* me)
     return aqueue_count(me->items);
 }
 
-int dqueue_offer(dqueue_t* me, const char* buf, size_t len)
+int dqueue_offer(dqueue_t* me, const char* buf, const size_t len)
 {
     header_t h;
 
-    size_t padding_required = sizeof(header_t) - len % sizeof(header_t);
-    size_t space_required = ITEM_METADATA_SIZE + len + padding_required;
+    size_t space_required = ITEM_METADATA_SIZE + len + __padding_required(len);
 
     if (me->size < dqueue_usedspace(me) + space_required)
         return -1;
@@ -305,7 +311,7 @@ int dqueue_offer(dqueue_t* me, const char* buf, size_t len)
 
     /* 3. write footer */
     h.type = htonl(FOOTER);
-    me->tail += len + padding_required;
+    me->tail += len + __padding_required(len);
     memcpy(me->data + me->tail, &h, sizeof(header_t));
 
     /* durability */
@@ -321,7 +327,7 @@ int dqueue_offer(dqueue_t* me, const char* buf, size_t len)
     item_t* item = malloc(sizeof(item_t));
     item->pos = start;
     item->len = len;
-    item->spaced_required = space_required;
+    item->space_used = space_required;
     item->id = me->item_id++;
     aqueue_offer(me->items, item);
     return 0;
@@ -343,7 +349,7 @@ int dqueue_poll(dqueue_t * me)
     }
 
     item_t* item = aqueue_poll(me->items);
-    me->head += item->spaced_required;
+    me->head += item->space_used;
 
     free(item);
     if (me->size < me->head)

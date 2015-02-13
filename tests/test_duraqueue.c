@@ -191,6 +191,8 @@ void Testdqueue_can_offer_over_boundary(CuTest * tc)
 
 void Testdqueue_peek_gets_head(CuTest * tc)
 {
+    remove("tmp.queue");
+
     char *item = "testitem";
     char *item2 = "testitem2";
     void *qu = dqueuew_open("tmp.queue", 1 << 13);
@@ -203,5 +205,115 @@ void Testdqueue_peek_gets_head(CuTest * tc)
     CuAssertTrue(tc, 0 == dqueue_peek(qu, &data, &len));
     CuAssertTrue(tc, 0 == strncmp(item, data, len));
     CuAssertTrue(tc, strlen(item) == len);
+    dqueue_free(qu);
+}
+
+void Testdqueue_cant_poll_with_no_contents(CuTest * tc)
+{
+    remove("tmp.queue");
+
+    char *item = "testitem";
+    void *qu = dqueuew_open("tmp.queue", 1 << 13);
+
+    dqueue_offer(qu, item, strlen(item));
+    CuAssertTrue(tc, 0 == dqueue_poll(qu));
+    CuAssertTrue(tc, 0 == dqueue_count(qu));
+    dqueue_free(qu);
+}
+
+void Testdqueue_offer_and_poll_item(CuTest * tc)
+{
+    remove("tmp.queue");
+
+    char *item = "testitem";
+    void *qu = dqueuew_open("tmp.queue", 1 << 13);
+
+    size_t len;
+    char *data;
+
+    dqueue_offer(qu, item, strlen(item));
+    CuAssertTrue(tc, 0 == dqueue_peek(qu, &data, &len));
+    CuAssertTrue(tc, 0 == strncmp(item, data, len));
+    CuAssertTrue(tc, strlen(item) == len);
+    CuAssertTrue(tc, 0 == dqueue_poll(qu));
+    dqueue_free(qu);
+}
+
+void Testdqueue_fifo(CuTest * tc)
+{
+    remove("tmp.queue");
+
+    char *item = "testitem", *item2 = "testitem2";
+    void *qu = dqueuew_open("tmp.queue", 1 << 13);
+
+    char* data;
+    size_t len;
+
+    dqueue_offer(qu, item, strlen(item));
+    dqueue_offer(qu, item2, strlen(item2));
+
+    /* item 1 */
+    CuAssertTrue(tc, 0 == dqueue_peek(qu, &data, &len));
+    CuAssertTrue(tc, 0 == strncmp(item, data, len));
+    CuAssertTrue(tc, strlen(item) == len);
+    CuAssertTrue(tc, 0 == dqueue_poll(qu));
+
+    /* item 2 */
+    CuAssertTrue(tc, 0 == dqueue_peek(qu, &data, &len));
+    CuAssertTrue(tc, 0 == strncmp(item2, data, len));
+    CuAssertTrue(tc, strlen(item2) == len);
+    CuAssertTrue(tc, 0 == dqueue_poll(qu));
+
+    dqueue_free(qu);
+}
+
+void Testdqueue_poll_offer_past_boundary(CuTest * tc)
+{
+    remove("tmp.queue");
+
+    char *item1 = malloc(5000);
+    char *item2 = malloc(3000);
+    char *item3 = malloc(3000);
+    void *qu = dqueuew_open("tmp.queue", 1 << 13);
+
+    int i;
+
+    for (i = 0; i < 5000; i++)
+        item1[i] = 'a';
+    for (i = 0; i < 3000; i++)
+        item2[i] = 'b';
+    for (i = 0; i < 3000; i++)
+        item3[i] = 'c';
+
+    char* data;
+    size_t len;
+
+    dqueue_offer(qu, item1, 5000);
+    dqueue_offer(qu, item2, 3000);
+
+    /* poll item 1 */
+    CuAssertTrue(tc, 0 == dqueue_peek(qu, &data, &len));
+    CuAssertTrue(tc, 0 == strncmp(item1, data, len));
+    CuAssertTrue(tc, strlen(item1) == len);
+    CuAssertTrue(tc, 0 == dqueue_poll(qu));
+
+    /* peek item 2 */
+    CuAssertTrue(tc, 0 == dqueue_peek(qu, &data, &len));
+    CuAssertTrue(tc, 0 == strncmp(item2, data, len));
+    CuAssertTrue(tc, strlen(item2) == len);
+
+    dqueue_offer(qu, item3, 3000);
+
+    /* poll item 2 */
+    CuAssertTrue(tc, 0 == dqueue_peek(qu, &data, &len));
+    CuAssertTrue(tc, 0 == strncmp(item2, data, len));
+    CuAssertTrue(tc, strlen(item2) == len);
+    CuAssertTrue(tc, 0 == dqueue_poll(qu));
+
+    /* poll item 3 */
+    CuAssertTrue(tc, 0 == dqueue_peek(qu, &data, &len));
+    CuAssertTrue(tc, 0 == strncmp(item3, data, len));
+    CuAssertTrue(tc, strlen(item3) == len);
+    CuAssertTrue(tc, 0 == dqueue_poll(qu));
     dqueue_free(qu);
 }
