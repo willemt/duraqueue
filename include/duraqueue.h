@@ -62,7 +62,7 @@ int dqueue_poll(dqueue_t* me);
 /**
  * @return 0 on successful read from disk
  */
-int dqueue_peek(dqueue_t* me, const char* path, char* data, size_t len);
+int dqueue_peek(dqueue_t* me, char** data, size_t* len);
 
 /**
  * @return 1 when queue is empty; 0 otherwise

@@ -189,3 +189,19 @@ void Testdqueue_can_offer_over_boundary(CuTest * tc)
     dqueue_free(wqu);
 }
 
+void Testdqueue_peek_gets_head(CuTest * tc)
+{
+    char *item = "testitem";
+    char *item2 = "testitem2";
+    void *qu = dqueuew_open("tmp.queue", 1 << 13);
+
+    size_t len;
+    char *data;
+
+    dqueue_offer(qu, item, strlen(item));
+    dqueue_offer(qu, item2, strlen(item2));
+    CuAssertTrue(tc, 0 == dqueue_peek(qu, &data, &len));
+    CuAssertTrue(tc, 0 == strncmp(item, data, len));
+    CuAssertTrue(tc, strlen(item) == len);
+    dqueue_free(qu);
+}

@@ -35,6 +35,7 @@ typedef struct
 {
     unsigned int pos;
     unsigned int len;
+    unsigned int spaced_required;
     unsigned int id;
 } item_t;
 
@@ -100,7 +101,7 @@ static int __load(dqueue_t* me)
 
         item_t* item = malloc(sizeof(item_t));
         item->pos = start_pos;
-        item->pos = h.len + ITEM_METADATA_SIZE;
+        item->len = h.len + ITEM_METADATA_SIZE;
         item->id = h.id;
         aqueue_offer(me->items, item);
 
@@ -319,7 +320,8 @@ int dqueue_offer(dqueue_t* me, const char* buf, size_t len)
 
     item_t* item = malloc(sizeof(item_t));
     item->pos = start;
-    item->len = space_required;
+    item->len = len;
+    item->spaced_required = space_required;
     item->id = me->item_id++;
     aqueue_offer(me->items, item);
     return 0;
@@ -341,12 +343,22 @@ int dqueue_poll(dqueue_t * me)
     }
 
     item_t* item = aqueue_poll(me->items);
-    me->head += item->len;
+    me->head += item->spaced_required;
 
     free(item);
     if (me->size < me->head)
         me->head %= me->size;
 
+    return 0;
+}
+
+int dqueue_peek(dqueue_t* me, char** data, size_t* len)
+{
+    item_t* item = aqueue_peek(me->items);
+    if (!item)
+        return -1;
+    *data = me->data + item->pos + sizeof(header_t);
+    *len = item->len;
     return 0;
 }
 
