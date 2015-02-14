@@ -185,7 +185,7 @@ void Testdqueue_reader_can_reopen(CuTest * tc)
     CuAssertTrue(tc, strlen(item[2]) == len);
     CuAssertTrue(tc, 0 == dqueue_poll(qu));
 
-    dqueue_free(wqu);
+    dqueue_free(qu);
 }
 
 void Testdqueue_reader_can_reopen2(CuTest * tc)
@@ -224,7 +224,7 @@ void Testdqueue_reader_can_reopen2(CuTest * tc)
     CuAssertTrue(tc, strlen(item[2]) == len);
     CuAssertTrue(tc, 0 == dqueue_poll(qu));
 
-    dqueue_free(wqu);
+    dqueue_free(qu);
 }
 
 void Testdqueue_reader_can_reopen3(CuTest * tc)
@@ -266,7 +266,7 @@ void Testdqueue_reader_can_reopen3(CuTest * tc)
     CuAssertTrue(tc, strlen(item[2]) == len);
     CuAssertTrue(tc, 0 == dqueue_poll(qu));
 
-    dqueue_free(wqu);
+    dqueue_free(qu);
 }
 
 void Testdqueue_cannot_offer_over_capacity(CuTest * tc)
@@ -290,6 +290,7 @@ void Testdqueue_cant_offer_if_not_enough_space_full(CuTest * tc)
     remove("tmp.queue");
     void *qu = dqueuew_open("tmp.queue", 1 << 13);
     CuAssertTrue(tc, -1 == dqueue_offer(qu, "1000", 1 << 17));
+    dqueue_free(qu);
 }
 
 void Testdqueue_can_offer_over_boundary(CuTest * tc)
@@ -440,5 +441,6 @@ void Testdqueue_poll_offer_past_boundary(CuTest * tc)
     CuAssertTrue(tc, 0 == strncmp(item3, data, len));
     CuAssertTrue(tc, strlen(item3) == len);
     CuAssertTrue(tc, 0 == dqueue_poll(qu));
+
     dqueue_free(qu);
 }
