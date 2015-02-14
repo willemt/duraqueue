@@ -1,3 +1,10 @@
+.. image:: https://travis-ci.org/willemt/duraqueue.png
+   :target: https://travis-ci.org/willemt/duraqueue
+
+.. image:: https://coveralls.io/repos/willemt/duraqueue/badge.png
+  :target: https://coveralls.io/r/willemt/duraqueue
+
+
 *WARNING: Experimental - Don't use me in PROD*
 
 Dead simple queue that allows zero copy semantics and is durable under failure.
