@@ -116,7 +116,7 @@ static int __load(dqueue_t* me)
         item->space_used = ntohl(h.len) + ITEM_METADATA_SIZE +
                            __padding_required(ntohl(h.len));
         item->id = h.id;
-        aqueue_offer(me->items, item);
+        aqueue_offerensure((void*)&me->items, item);
 
         h.id = ntohl(h.id);
     }
@@ -148,20 +148,20 @@ static int __load(dqueue_t* me)
         }
     }
 
-    void* stowaway = aqueue_new(16);
+    arrayqueue_t* stowaway = aqueue_new(16);
 
     /* put lowest at front of queue */
-    while (1)
+    while (!aqueue_is_empty(me->items))
     {
         item_t* item = aqueue_peek(me->items);
         if (item->id == lowest_id)
             break;
-        aqueue_offer(stowaway, aqueue_poll(me->items));
+        aqueue_offerensure(&stowaway, aqueue_poll(me->items));
     }
 
     /* empty out stowaway */
     while (!aqueue_is_empty(stowaway))
-        aqueue_offer(me->items, aqueue_poll(stowaway));
+        aqueue_offerensure((void*)&me->items, aqueue_poll(stowaway));
 
     aqueue_free(stowaway);
 
@@ -341,7 +341,7 @@ int dqueue_offer(dqueue_t* me, const char* buf, const size_t len)
     item->len = len;
     item->space_used = space_required;
     item->id = me->item_id++;
-    aqueue_offer(me->items, item);
+    aqueue_offerensure((void*)&me->items, item);
     return 0;
 }
 

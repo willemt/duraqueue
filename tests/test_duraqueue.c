@@ -444,3 +444,33 @@ void Testdqueue_poll_offer_past_boundary(CuTest * tc)
 
     dqueue_free(qu);
 }
+
+void Testdqueue_offer_1024_items(CuTest * tc)
+{
+    remove("tmp.queue");
+
+    char *items = malloc(1024);
+    void *qu = dqueuew_open("tmp.queue", 1 << 17);
+    unsigned int i;
+
+    /* offer 1024 items */
+    for (i = 0; i < 1024; i++)
+    {
+        items[i] = i % 255;
+        CuAssertTrue(tc, 0 == dqueue_offer(qu, &items[i], 1));
+    }
+    CuAssertTrue(tc, 1024 == dqueue_count(qu));
+
+    /* ensure we can read all 1024 items */
+    for (i = 0; i < 1024; i++)
+    {
+        char *data;
+        unsigned long len;
+        CuAssertTrue(tc, 0 == dqueue_peek(qu, &data, &len));
+        CuAssertTrue(tc, 1 == len);
+        CuAssertTrue(tc, i % 255 == (unsigned char)data[0]);
+        CuAssertTrue(tc, 0 == dqueue_poll(qu));
+    }
+
+    dqueue_free(qu);
+}
