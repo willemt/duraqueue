@@ -3,9 +3,10 @@
 
 .. image:: https://coveralls.io/repos/willemt/duraqueue/badge.png
   :target: https://coveralls.io/r/willemt/duraqueue
+  
+.. image:: http://badges.github.io/stability-badges/dist/experimental.svg
+  :target: http://github.com/badges/stability-badges
 
-
-*WARNING: Experimental - Don't use me in PROD*
 
 Dead simple queue that allows zero copy semantics and is durable under failure.
 
