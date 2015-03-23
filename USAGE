@@ -1,0 +1,8 @@
+dq - a command line tool for duraqueue the dead simple queue
+
+Usage:
+  dq info <queue_file>
+  dq --help
+
+Options:
+  -h --help  Prints a short usage summary.

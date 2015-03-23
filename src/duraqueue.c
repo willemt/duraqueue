@@ -71,14 +71,14 @@ static int __load(dqueue_t* me)
 
     while (pos < me->size)
     {
-        int ret, start_pos;
+        int e, start_pos;
         header_t h;
 
         start_pos = pos;
 
         /* 1. read first header */
-        ret = read(me->fd, &h, sizeof(header_t));
-        if (ret < (int)sizeof(header_t))
+        e = read(me->fd, &h, sizeof(header_t));
+        if (e < (int)sizeof(header_t))
             return -1;
         pos += sizeof(header_t);
 
@@ -91,11 +91,11 @@ static int __load(dqueue_t* me)
         /* 2. read 2nd header */
         /* put on sizeof(header_t) offset */
         size_t offset = sizeof(header_t) - ntohl(h.len) % sizeof(header_t);
-        ret = lseek(me->fd, ntohl(h.len) + offset, SEEK_CUR);
+        e = lseek(me->fd, ntohl(h.len) + offset, SEEK_CUR);
         pos += ntohl(h.len);
 
-        ret = read(me->fd, &h, sizeof(header_t));
-        if (ret < (int)sizeof(header_t))
+        e = read(me->fd, &h, sizeof(header_t));
+        if (e < (int)sizeof(header_t))
         {
             perror("couldn't read file\n");
             return -1;
@@ -230,24 +230,24 @@ dqueue_t* dqueuer_open(const char* path)
 
 static int __create_stub_file(unsigned int fd, size_t size)
 {
-    int ret;
+    int e;
 
-    ret = lseek(fd, size, SEEK_SET);
-    if (-1 == ret)
+    e = lseek(fd, size, SEEK_SET);
+    if (-1 == e)
     {
         perror("couldn't seek\n");
         return -1;
     }
 
-    ret = write(fd, "\0", 1);
-    if (-1 == ret)
+    e = write(fd, "\0", 1);
+    if (-1 == e)
     {
         perror("Couldn't write to file\n");
         return -1;
     }
 
-    ret = lseek(fd, 0, SEEK_SET);
-    if (-1 == ret)
+    e = lseek(fd, 0, SEEK_SET);
+    if (-1 == e)
     {
         perror("Couldn't seek to start of file\n");
         return -1;
@@ -280,9 +280,8 @@ dqueue_t* dqueuew_open(const char* path, size_t max_size)
             return NULL;
         }
 
-        /* create a stub file */
-        int ret = __create_stub_file(me->fd, max_size);
-        if (-1 == ret)
+        int e = __create_stub_file(me->fd, max_size);
+        if (-1 == e)
             return NULL;
 
         me->size = max_size;
@@ -327,8 +326,8 @@ int dqueue_offer(dqueue_t* me, const char* buf, const size_t len)
     memcpy(me->data + me->tail, &h, sizeof(header_t));
 
     /* durability */
-    int ret = msync(me->data, space_required, MS_SYNC | MS_INVALIDATE);
-    if (-1 == ret)
+    int e = msync(me->data, space_required, MS_SYNC | MS_INVALIDATE);
+    if (-1 == e)
     {
         perror("Couldn't fsync file\n");
         return -1;
@@ -353,8 +352,8 @@ int dqueue_poll(dqueue_t * me)
     memcpy(me->data + me->head, &h, sizeof(header_t));
 
     // TODO: replace with fdatasync()
-    int ret = msync(me->data, sizeof(header_t), MS_SYNC | MS_INVALIDATE);
-    if (-1 == ret)
+    int e = msync(me->data, sizeof(header_t), MS_SYNC | MS_INVALIDATE);
+    if (-1 == e)
     {
         perror("Couldn't fsync file\n");
         return -1;
