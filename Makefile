@@ -18,4 +18,4 @@ dq: src/cli.c src/duraqueue.c deps/arrayqueue/arrayqueue.c
 	$(CC) $(CCFLAGS) -o $@ $^
 
 clean:
-	rm -f main.c duraqueue.o $(GCOV_OUTPUT)
+	rm -f main.c duraqueue.o dq $(GCOV_OUTPUT)

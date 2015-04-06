@@ -35,52 +35,29 @@ Options:
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "usage.c"
+
 int main(int argc, char **argv)
 {
-    int aflag = 0;
-    int bflag = 0;
-    char *cvalue = NULL;
-    int index;
-    int c;
+    int e;
+    options_t opts;
 
-    char* file;
-
-    opterr = 0;
-    while ((c = getopt(argc, argv, "abc:")) != -1)
-        switch (c)
-        {
-        case 'a':
-            aflag = 1;
-            break;
-        case 'b':
-            bflag = 1;
-            break;
-        case 'c':
-            cvalue = optarg;
-            break;
-        case '?':
-            if (optopt == 'c')
-                fprintf(stderr, "Option -%c requires an argument.\n", optopt);
-            else if (isprint(optopt))
-                fprintf(stderr, "Unknown option `-%c'.\n", optopt);
-            else
-                fprintf(stderr,
-                        "Unknown option character `\\x%x'.\n",
-                        optopt);
-            return 1;
-        default:
-            abort();
-        }
-
-    printf("aflag = %d, bflag = %d, cvalue = %s\n", aflag, bflag, cvalue);
+    e = parse_options(argc, argv, &opts);
+    if (-1 == e)
+    {
+        exit(-1);
+    }
 
     void *qu = NULL;
 
-    for (index = optind; index < argc; index++)
+    if (opts.help)
     {
-        printf("Non-option argument %s\n", argv[index]);
-        file = argv[index];
-        qu = dqueuer_open(file);
+        show_usage();
+        exit(0);
+    }
+    else if (opts.info)
+    {
+        qu = dqueuer_open(opts.queue_file);
     }
 
     if (qu)
