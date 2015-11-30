@@ -8,6 +8,8 @@
 #include <errno.h>
 #include <limits.h>
 
+#include <assert.h>
+
 /* for ntohl */
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -21,6 +23,7 @@
 
 #include "duraqueue.h"
 #include "arrayqueue.h"
+#include "snap2pagesize.h"
 
 #define STAMP "xxxxxxxxxxxxxxxx"
 #define HEADER 0
@@ -298,8 +301,9 @@ unsigned int dqueue_count(dqueue_t* me)
     return aqueue_count(me->items);
 }
 
-int dqueue_offer(dqueue_t* me, const char* buf, const size_t len)
+int dqueue_offer(dqueue_txn_t* txn, const char* buf, const size_t len)
 {
+    dqueue_t* me = txn->dq;
     header_t h;
 
     size_t space_required = ITEM_METADATA_SIZE + len + __padding_required(len);
@@ -325,16 +329,11 @@ int dqueue_offer(dqueue_t* me, const char* buf, const size_t len)
     me->tail += len + __padding_required(len);
     memcpy(me->data + me->tail, &h, sizeof(header_t));
 
-    /* durability */
-    int e = msync(me->data, space_required, MS_SYNC | MS_INVALIDATE);
-    if (-1 == e)
-    {
-        perror("Couldn't fsync file\n");
-        return -1;
-    }
+    txn->end += space_required;
 
     me->tail += sizeof(header_t);
 
+    /* FIXME: use pool */
     item_t* item = malloc(sizeof(item_t));
     item->pos = start;
     item->len = len;
@@ -351,10 +350,15 @@ int dqueue_poll(dqueue_t * me)
     memset(&h, 0, sizeof(header_t));
     memcpy(me->data + me->head, &h, sizeof(header_t));
 
+    void* start = me->data + me->head;
+    size_t len = sizeof(header_t);
+    snap2pagesize(&start, &len);
+
     // TODO: replace with fdatasync()
-    int e = msync(me->data, sizeof(header_t), MS_SYNC | MS_INVALIDATE);
+    int e = msync(start, len, MS_SYNC | MS_INVALIDATE);
     if (-1 == e)
     {
+        printf("%d\n", me->head);
         perror("Couldn't fsync file\n");
         return -1;
     }
@@ -400,4 +404,35 @@ int dqueue_usedspace(const dqueue_t *me)
 int dqueue_unusedspace(const dqueue_t *me)
 {
     return dqueue_size(me) - dqueue_usedspace(me);
+}
+
+int dqueue_txn_begin(dqueue_t* me, dqueue_txn_t* txn)
+{
+    memset(txn, 0, sizeof(dqueue_txn_t));
+    txn->start = txn->end = me->data + me->tail; 
+    txn->dq = me;
+    return 0;
+}
+
+int dqueue_txn_commit(dqueue_txn_t* txn)
+{
+    dqueue_t* me = txn->dq; 
+
+    if (txn->end == txn->start)
+        return -1;
+
+    void* start = txn->start;
+    size_t len = txn->end - txn->start;
+    snap2pagesize(&start, &len);
+
+    /* durability */
+    int e = msync(start, len, MS_SYNC | MS_INVALIDATE);
+    if (-1 == e)
+    {
+        perror("Couldn't fsync file\n");
+        assert(0);
+        return -1;
+    }
+
+    return 0;
 }
