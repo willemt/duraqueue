@@ -1,12 +1,12 @@
-#ifndef ARRAYQUEUE_H
-#define ARRAYQUEUE_H
+#ifndef ARRAYqueue_H
+#define ARRAYqueue_H
 
 typedef struct
 {
-    int size;              /* size of array */
-    int count;             /* the amount of items in the array */
-    int front, back;       /* position of the queue */
-    void *array[];
+    size_t m_size;      /* size of member */
+    size_t size;        /* size of array */
+    size_t count;       /* the amount of items in the array */
+    size_t front, back; /* position of the queue */
 } arrayqueue_t;
 
 typedef struct
@@ -21,7 +21,7 @@ typedef struct
  *
  * @param[in] size Initial size of queue
  * @return initialised queue */
-arrayqueue_t* aqueue_new(unsigned int size);
+arrayqueue_t* aqueue_new(size_t size, size_t m_size);
 
 /**
  * Create a new data structure and initialise it.
@@ -30,11 +30,11 @@ arrayqueue_t* aqueue_new(unsigned int size);
  *
  * @param[in] size Initial size of queue
  * @return initialised queue */
-void aqueue_init(arrayqueue_t* qu, unsigned int size);
+void aqueue_init(arrayqueue_t* qu, size_t size, size_t m_size);
 
 /**
  * @return number of bytes needed for a queue of this size. */
-size_t aqueue_sizeof(unsigned int size);
+size_t aqueue_sizeof(size_t size, size_t m_size);
 
 /**
  * Is the queue empty?
@@ -44,21 +44,13 @@ int aqueue_is_empty(const arrayqueue_t * qu);
 
 /**
  * @return oldest item in this queue. */
-void *aqueue_peek(const arrayqueue_t * qu);
-
-void *aqueue_peektail(const arrayqueue_t * qu);
-
-/**
- * Remove youngest item from queue.
- *
- * @return youngest item */
-void *aqueue_polltail(arrayqueue_t * qu);
+void *aqueue_peek(arrayqueue_t * qu);
 
 /**
  * Remove oldest item from queue.
  *
- * @return oldest item */
-void *aqueue_poll(arrayqueue_t * qu);
+ * @return 0 on sucess; -1 on failure */
+int aqueue_poll(arrayqueue_t * qu);
 
 /**
  * Add item
@@ -110,6 +102,4 @@ void aqueue_iter_reverse(arrayqueue_t* qu, arrayqueue_iter_t* iter);
 
 void aqueue_iter(arrayqueue_t * qu, arrayqueue_iter_t * iter);
 
-void* aqueue_get_from_idx(arrayqueue_t * me, int idx);
-
-#endif /* ARRAYQUEUE_H */
+#endif /* ARRAYqueue_H */

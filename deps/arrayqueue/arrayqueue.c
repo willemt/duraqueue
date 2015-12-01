@@ -7,31 +7,38 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <assert.h>
 #include "arrayqueue.h"
 
-void aqueue_init(arrayqueue_t* me, unsigned int size)
+void aqueue_init(arrayqueue_t* me, size_t size, size_t m_size)
 {
+    me->m_size = m_size;
     me->size = size;
     me->count = 0;
     me->back = me->front = 0;
 }
 
-arrayqueue_t* aqueue_new(unsigned int size)
+void* aqueue_array(arrayqueue_t* me)
 {
-    arrayqueue_t *me = malloc(aqueue_sizeof(size));
+    return (void*)me + sizeof(arrayqueue_t);
+}
+
+arrayqueue_t* aqueue_new(size_t size, size_t m_size)
+{
+    arrayqueue_t *me = malloc(aqueue_sizeof(size, m_size));
 
     if (!me)
         return NULL;
 
-    aqueue_init(me, size);
+    aqueue_init(me, size, m_size);
 
     return me;
 }
 
-size_t aqueue_sizeof(unsigned int size)
+size_t aqueue_sizeof(size_t size, size_t m_size)
 {
-    return sizeof(arrayqueue_t) + size * sizeof(void *);
+    return sizeof(arrayqueue_t) + size * m_size;
 }
 
 int aqueue_is_empty(const arrayqueue_t * me)
@@ -49,16 +56,18 @@ static arrayqueue_t* __ensurecapacity(arrayqueue_t * me)
     if (me->count < me->size)
         return me;
 
-    arrayqueue_t *new = malloc(aqueue_sizeof(me->size * 2));
+    arrayqueue_t *new = malloc(aqueue_sizeof(me->size * 2, me->m_size));
 
-    int ii, jj;
+    size_t ii, jj;
     for (ii = 0, jj = me->front; ii < me->count; ii++, jj++)
     {
         if (jj == me->size)
             jj = 0;
-        new->array[ii] = me->array[jj];
+        memcpy(aqueue_array(new) + ii * me->m_size, aqueue_array(me) + jj * me->m_size,
+               me->m_size);
     }
 
+    new->m_size = me->m_size;
     new->size = me->size * 2;
     new->front = 0;
     new->count = new->back = me->count;
@@ -66,66 +75,38 @@ static arrayqueue_t* __ensurecapacity(arrayqueue_t * me)
     return new;
 }
 
-void *aqueue_peek(const arrayqueue_t * me)
+void *aqueue_peek(arrayqueue_t * me)
 {
     if (aqueue_is_empty(me))
         return NULL;
-    return ((void**)me->array)[me->front];
+    return aqueue_array(me) + me->front * me->m_size;
 }
 
-void *aqueue_peektail(const arrayqueue_t * me)
+int aqueue_poll(arrayqueue_t * me)
 {
     if (aqueue_is_empty(me))
-        return NULL;
-
-    int pos = me->back - 1;
-
-    /* don't forget about wrapping */
-    if (pos < 0)
-        pos = me->size - 1;
-
-    return ((void**)me->array)[pos];
-}
-
-void *aqueue_poll(arrayqueue_t * me)
-{
-    if (aqueue_is_empty(me))
-        return NULL;
-
-    void *elem = me->array[me->front];
+        return -1;
 
     me->front++;
     if (me->size == me->front)
         me->front = 0;
     me->count--;
-
-    return elem;
+    return 0;
 }
 
-void *aqueue_polltail(arrayqueue_t * me)
+int aqueue_offerensure(arrayqueue_t **me_ptr, void *item)
 {
-    if (aqueue_is_empty(me))
-        return NULL;
-
-    me->back--;
-    me->count--;
-    if (-1 == me->back)
-        me->back = me->size;
-
-    return me->array[me->back];
-}
-
-int aqueue_offerensure(arrayqueue_t **me, void *item)
-{
-    if (NULL == (*me = __ensurecapacity(*me)))
+    if (NULL == (*me_ptr = __ensurecapacity(*me_ptr)))
         return -1;
 
-    ((const void**)(*me)->array)[(*me)->back] = item;
-    (*me)->count++;
-    (*me)->back++;
+    arrayqueue_t* me = *me_ptr;
 
-    if (!aqueue_is_full(*me) && (*me)->size == (*me)->back)
-        (*me)->back = 0;
+    memcpy(aqueue_array(me) + me->back * me->m_size, item, me->m_size);
+    me->count++;
+    me->back++;
+
+    if (!aqueue_is_full(me) && me->size == me->back)
+        me->back = 0;
     return 0;
 }
 
@@ -134,7 +115,7 @@ int aqueue_offer(arrayqueue_t *me, void *item)
     if (aqueue_is_full(me))
         return -1;
 
-    ((const void**)me->array)[me->back] = item;
+    memcpy(aqueue_array(me) + me->back * me->m_size, item, me->m_size);
     me->count++;
     me->back++;
 
@@ -165,12 +146,12 @@ int aqueue_size(const arrayqueue_t * me)
 
 void* aqueue_get_from_idx(arrayqueue_t * me, int idx)
 {
-    return me->array[(me->front + idx) % me->size];
+    return aqueue_array(me) + ((me->front + idx) % me->size) * me->m_size;
 }
 
 int aqueue_iter_has_next(arrayqueue_t* me, arrayqueue_iter_t* iter)
 {
-    if (iter->current == me->back)
+    if (iter->current == (int)me->back)
         return 0;
     return 1;
 }
@@ -180,10 +161,14 @@ void *aqueue_iter_next(arrayqueue_t* me, arrayqueue_iter_t* iter)
     if (!aqueue_iter_has_next(me, iter))
         return NULL;
 
-    if (iter->current == me->size)
+    if (iter->current == (int)me->size)
         iter->current = 0;
 
-    return (void*)me->array[iter->current++];
+    void* item = aqueue_array(me) + iter->current * me->m_size;
+
+    iter->current++;
+
+    return item;
 }
 
 int aqueue_iter_has_next_reverse(arrayqueue_t* me,
@@ -206,7 +191,7 @@ void *aqueue_iter_next_reverse(arrayqueue_t* me,
     if (!aqueue_iter_has_next_reverse(me, iter))
         return NULL;
 
-    void *val = (void*)me->array[iter->current];
+    void* val = aqueue_array(me) + iter->current * me->m_size;
 
     iter->current--;
     if (iter->current < 0)

@@ -559,6 +559,7 @@ void Testdqueue_offer_1024_items(CuTest * tc)
         unsigned long len;
         CuAssertTrue(tc, 0 == dqueue_peek(qu, &data, &len));
         CuAssertTrue(tc, 1 == len);
+        /* printf("%d %d\n", i % 255, (unsigned char)data[0]); */
         CuAssertTrue(tc, i % 255 == (unsigned char)data[0]);
         CuAssertTrue(tc, 0 == dqueue_poll(qu));
     }

@@ -113,13 +113,13 @@ static int __load(dqueue_t* me)
 
         /* found a valid queue item */
 
-        item_t* item = malloc(sizeof(item_t));
-        item->pos = start_pos;
-        item->len = ntohl(h.len);
-        item->space_used = ntohl(h.len) + ITEM_METADATA_SIZE +
+        item_t item;
+        item.pos = start_pos;
+        item.len = ntohl(h.len);
+        item.space_used = ntohl(h.len) + ITEM_METADATA_SIZE +
                            __padding_required(ntohl(h.len));
-        item->id = h.id;
-        aqueue_offerensure((void*)&me->items, item);
+        item.id = h.id;
+        aqueue_offerensure((void*)&me->items, &item);
 
         h.id = ntohl(h.id);
     }
@@ -151,7 +151,7 @@ static int __load(dqueue_t* me)
         }
     }
 
-    arrayqueue_t* stowaway = aqueue_new(16);
+    arrayqueue_t* stowaway = aqueue_new(16, sizeof(item_t));
 
     /* put lowest at front of queue */
     while (!aqueue_is_empty(me->items))
@@ -159,12 +159,16 @@ static int __load(dqueue_t* me)
         item_t* item = aqueue_peek(me->items);
         if (item->id == lowest_id)
             break;
-        aqueue_offerensure(&stowaway, aqueue_poll(me->items));
+        aqueue_offerensure(&stowaway, aqueue_peek(me->items));
+        aqueue_poll(me->items);
     }
 
     /* empty out stowaway */
     while (!aqueue_is_empty(stowaway))
-        aqueue_offerensure((void*)&me->items, aqueue_poll(stowaway));
+    {
+        aqueue_offerensure((void*)&me->items, aqueue_peek(stowaway));
+        aqueue_poll(stowaway);
+    }
 
     aqueue_free(stowaway);
 
@@ -218,7 +222,7 @@ dqueue_t* dqueuer_open(const char* path)
     }
 
     me->size = __get_maxsize(me->fd);
-    me->items = aqueue_new(16);
+    me->items = aqueue_new(16, sizeof(item_t));
     me->head = me->tail = 0;
 
     __load(me);
@@ -265,8 +269,8 @@ dqueue_t* dqueuew_open(const char* path, size_t max_size)
         return NULL;
 
     dqueue_t* me = calloc(1, sizeof(dqueue_t));
+    me->items = aqueue_new(16, sizeof(item_t));
     me->head = me->tail = 0;
-    me->items = aqueue_new(16);
 
     if (access(path, F_OK ) != -1)
     {
@@ -334,12 +338,12 @@ int dqueue_offer(dqueue_txn_t* txn, const char* buf, const size_t len)
     me->tail += sizeof(header_t);
 
     /* FIXME: use pool */
-    item_t* item = malloc(sizeof(item_t));
-    item->pos = start;
-    item->len = len;
-    item->space_used = space_required;
-    item->id = me->item_id++;
-    aqueue_offerensure((void*)&me->items, item);
+    item_t item;
+    item.pos = start;
+    item.len = len;
+    item.space_used = space_required;
+    item.id = me->item_id++;
+    aqueue_offerensure((void*)&me->items, &item);
     return 0;
 }
 
@@ -358,15 +362,14 @@ int dqueue_poll(dqueue_t * me)
     int e = msync(start, len, MS_SYNC | MS_INVALIDATE);
     if (-1 == e)
     {
-        printf("%d\n", me->head);
         perror("Couldn't fsync file\n");
         return -1;
     }
 
-    item_t* item = aqueue_poll(me->items);
+    item_t* item = aqueue_peek(me->items);
     me->head += item->space_used;
+    aqueue_poll(me->items);
 
-    free(item);
     if (me->size < me->head)
         me->head %= me->size;
 
@@ -378,6 +381,7 @@ int dqueue_peek(dqueue_t* me, char** data, size_t* len)
     item_t* item = aqueue_peek(me->items);
     if (!item)
         return -1;
+
     *data = me->data + item->pos + sizeof(header_t);
     *len = item->len;
     return 0;
