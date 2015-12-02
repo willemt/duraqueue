@@ -1,0 +1,12 @@
+{
+  "name": "snap2pagesize",
+  "version": "0.0.1",
+  "repo": "willemt/snap2pagesize",
+  "description": "Useful for snapping your pointer to the system's pagesize",
+  "keywords": [ "string" ],
+  "license": "public domain",
+  "src": [
+    "snap2pagesize.c",
+    "snap2pagesize.h"
+  ]
+}
